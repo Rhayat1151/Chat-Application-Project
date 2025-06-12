@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import './login.css'
+import { toast } from 'react-toastify'
 
 const Login = () => {
   const [avatar, setAvatar] = useState({
@@ -20,12 +21,14 @@ const Login = () => {
   const handleLogin = (e) => {
     e.preventDefault()
     // Add your login logic here
+    toast.warn('Login form submitted')
     console.log('Login form submitted')
   }
 
   const handleRegister = (e) => {
     e.preventDefault()
     // Add your registration logic here
+    toast.warn('Login form submitted')
     console.log('Register form submitted')
   }
 
