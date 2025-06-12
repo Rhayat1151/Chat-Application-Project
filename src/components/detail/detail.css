@@ -1,0 +1,249 @@
+/* .detail{
+    flex: 1;
+
+    .user{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px 30px;
+        gap: 20px;
+        border-bottom: 1px solid #dddddd35;
+
+
+        img{
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+    }
+
+    .info{
+        display: flex;
+        flex-direction: column;
+        padding: 20px ;
+        gap: 30px;
+
+
+        .option{
+
+            .title{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+
+                img{
+                    width: 30px;
+                    height: 30px;
+                    cursor: pointer;
+                    padding: 30px;
+                    border-radius: 50%;
+                    background-color: rgba(17,25,40, 0.3);
+                }
+            }
+
+
+            .photos{
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+
+                .photoitem{
+
+                    .photodetail{
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 5px;
+                        object-fit: cover;
+
+
+                    }
+                }
+            }
+
+        }
+
+
+
+    }
+} */
+
+.detail{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+
+    .user{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px 30px;
+        gap: 12px;
+        border-bottom: 1px solid #dddddd35;
+
+        img{
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        h2{
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: white;
+        }
+
+        p{
+            margin: 0;
+            font-size: 14px;
+            color: #a5a5a5;
+            text-align: center;
+        }
+    }
+
+    .info{
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        gap: 8px;
+        flex: 1;
+
+        .option{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+
+            .title{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                cursor: pointer;
+                padding: 10px 0;
+
+                span{
+                    font-size: 16px;
+                    font-weight: 500;
+                    color: white;
+                }
+
+                img{
+                    width: 20px;
+                    height: 20px;
+                    cursor: pointer;
+                    padding: 5px;
+                    border-radius: 50%;
+                    background-color: rgba(17, 25, 40, 0.5);
+                    transition: background-color 0.3s ease;
+
+                    &:hover{
+                        background-color: rgba(17, 25, 40, 0.7);
+                    }
+                }
+            }
+
+            .photos{
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                padding-left: 10px;
+
+                .photoitem{
+                    .photodetail{
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 10px;
+                        border-radius: 8px;
+                        background-color: rgba(17, 25, 40, 0.2);
+                        transition: background-color 0.3s ease;
+
+                        &:hover{
+                            background-color: rgba(17, 25, 40, 0.4);
+                        }
+
+                        img{
+                            width: 50px;
+                            height: 50px;
+                            border-radius: 5px;
+                            object-fit: cover;
+                        }
+
+                        span{
+                            font-size: 14px;
+                            color: #a5a5a5;
+                        }
+                    }
+                }
+
+                > img{
+                    width: 30px;
+                    height: 30px;
+                    align-self: center;
+                    cursor: pointer;
+                    padding: 10px;
+                    border-radius: 50%;
+                    background-color: rgba(17, 25, 40, 0.3);
+                    margin-top: 10px;
+                    transition: background-color 0.3s ease;
+
+                    &:hover{
+                        background-color: rgba(17, 25, 40, 0.5);
+                    }
+                }
+            }
+        }
+
+        button {
+            background-color: rgba(255, 71, 87, 0.7); /* reduced opacity */
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 10pxxpx;
+            transition: background-color 0.3s ease;
+            opacity: 0.85; /* slightly transparent */
+
+            
+        }
+
+        button:hover {
+            background-color: rgba(255, 55, 66, 0.95); /* more solid red on hover */
+            opacity: 1;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+    }
+}
+
+.logout {
+  background-color: rgba(255, 71, 87, 0.7); /* soft red */
+  color: #fff;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: background-color 0.3s, opacity 0.3s;
+  opacity: 0.85;
+}
+
+.logout:hover {
+  background-color: rgba(255, 55, 66, 0.95); /* more solid red */
+  opacity: 1;
+}
+
+.logout:active {
+  transform: translateY(1px);
+}
