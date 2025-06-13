@@ -1,10 +1,12 @@
 import './chat.css'
 import Emojipicker from "emoji-picker-react"
 import { useState, useRef, useEffect } from 'react'
+import { useUserStore } from '../../lib/useStore'
 
 const Chat = () => {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState("")
+  const { handleLogout } = useUserStore()
 
   const endRef = useRef(null);
   
@@ -33,6 +35,7 @@ const Chat = () => {
           <img src="phone.png" alt="" />
           <img src="video.png" alt="" />
           <img src="info.png" alt="" />
+          <button onClick={handleLogout} className="logout-btn">Logout</button>
         </div>
       </div>
 

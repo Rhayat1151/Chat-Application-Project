@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import './login.css'
 import { toast } from 'react-toastify'
+import { createUserWithEmailAndPassword } from 'firebase/auth'
+import { auth } from '../../lib/firebase' // Adjust the path as needed
 
 const Login = () => {
   const [avatar, setAvatar] = useState({
@@ -19,17 +21,30 @@ const Login = () => {
   }
 
   const handleLogin = (e) => {
-    e.preventDefault()
-    // Add your login logic here
-    toast.warn('Login form submitted')
-    console.log('Login form submitted')
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const { email, password } = Object.fromEntries(formData);
+    console.log(email, password);
+    toast.warn('Login form submitted');
+    console.log(email, password);
   }
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault()
-    // Add your registration logic here
-    toast.warn('Login form submitted')
-    console.log('Register form submitted')
+    const formData = new FormData(e.target);
+    const { username, email, password } = Object.fromEntries(formData);
+    try{
+        const res = await createUserWithEmailAndPassword(auth, email, password);
+        
+    }catch(err) {
+      console.log(err);
+      toast.error('Failed to register. Please try again');
+      return;
+    }
+    // console.log(username, email, password);
+    // // Add your registration logic here
+    // toast.warn('Login form submitted')
+    // console.log('Register form submitted')
   }
 
   return (
@@ -37,8 +52,8 @@ const Login = () => {
       <div className="item">
         <h2>Welcome Back</h2>
         <form onSubmit={handleLogin}>
-          <input type="email" placeholder='Email' required />
-          <input type="password" placeholder='Password' required />
+          <input type="email" placeholder='Email' required name="email" />
+          <input type="password" placeholder='Password' required name="password" />
           <button type="submit">Sign In</button>
         </form>
       </div>
@@ -60,10 +75,11 @@ const Login = () => {
             style={{display:'none'}} 
             onChange={handleAvatar}
             accept="image/*"
+            name="avatar"
           />
-          <input type="text" placeholder='Username' required />
-          <input type="email" placeholder='Email' required />
-          <input type="password" placeholder='Password' required />
+          <input type="text" placeholder='Username' required name="username" />
+          <input type="email" placeholder='Email' required name="email" />
+          <input type="password" placeholder='Password' required name="password" />
           <button type="submit">Sign Up</button>
         </form>
       </div>
