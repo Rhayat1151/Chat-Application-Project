@@ -80,6 +80,69 @@ class ApiService {
     });
   }
 
+  // NEW: Block/Unblock user methods
+  async blockUser(currentUserId, userToBlockId) {
+    return this.request(`/users/${currentUserId}/block`, {
+      method: 'POST',
+      body: { userToBlockId },
+    });
+  }
+
+  async unblockUser(currentUserId, userToUnblockId) {
+    return this.request(`/users/${currentUserId}/unblock`, {
+      method: 'POST',
+      body: { userToUnblockId },
+    });
+  }
+
+  async getBlockedUsers(userId) {
+    return this.request(`/users/${userId}/blocked`);
+  }
+
+  // NEW: Chat container/collection methods
+  async createChatContainer(containerName) {
+    return this.request('/chats/container', {
+      method: 'POST',
+      body: { containerName },
+    });
+  }
+
+  async createChatDocument(containerName, chatData) {
+    return this.request(`/chats/${containerName}`, {
+      method: 'POST',
+      body: chatData,
+    });
+  }
+
+  async getChatMessages(containerName, chatId) {
+    return this.request(`/chats/${containerName}/${chatId}`);
+  }
+
+  async getAllChatsForUser(containerName) {
+    return this.request(`/chats/${containerName}`);
+  }
+
+  async updateChatMessage(containerName, chatId, messageData) {
+    return this.request(`/chats/${containerName}/${chatId}`, {
+      method: 'PUT',
+      body: messageData,
+    });
+  }
+
+  async deleteChatMessage(containerName, chatId) {
+    return this.request(`/chats/${containerName}/${chatId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // NEW: Combined user registration with chat container creation
+  async registerUserWithChatContainer(userData) {
+    return this.request('/users/register-with-chat', {
+      method: 'POST',
+      body: userData,
+    });
+  }
+
   // Health check
   async healthCheck() {
     return this.request('/health');

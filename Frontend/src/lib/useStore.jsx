@@ -1,187 +1,3 @@
-// import React, { createContext, useContext, useState, useEffect } from 'react'
-// import { onAuthStateChanged, signOut } from 'firebase/auth'
-// import { auth, handleUserAuthentication, updateUserOnlineStatus } from './firebase'
-// import { toast } from 'react-toastify'
-
-// const UserContext = createContext()
-
-// export const useUserStore = () => {
-//   const context = useContext(UserContext)
-//   if (!context) {
-//     throw new Error('useUserStore must be used within a UserProvider')
-//   }
-//   return context
-// }
-
-// export const UserProvider = ({ children }) => {
-//   const [currentUser, setCurrentUser] = useState(null)
-//   const [isLoading, setIsLoading] = useState(true)
-//   const [hasInitialized, setHasInitialized] = useState(false)
-//   const [isProcessingAuth, setIsProcessingAuth] = useState(false)
-
-//   const fetchUserInfo = async (firebaseUser) => {
-//     if (!firebaseUser) {
-//       setCurrentUser(null)
-//       setIsLoading(false)
-//       setIsProcessingAuth(false)
-//       return
-//     }
-
-//     // Prevent multiple simultaneous auth processing
-//     if (isProcessingAuth) {
-//       console.log('Auth already in progress, skipping...')
-//       return
-//     }
-
-//     setIsProcessingAuth(true)
-//     console.log('🔄 Processing user authentication...')
-
-//     try {
-//       // Handle user authentication and sync with Azure DB
-//       const azureUser = await handleUserAuthentication(firebaseUser)
-      
-//       if (azureUser) {
-//         setCurrentUser(azureUser)
-//         // Set user as online
-//         await updateUserOnlineStatus(firebaseUser.uid, true)
-//         console.log('✅ User authentication completed successfully')
-//       } else {
-//         console.log('⚠️ Azure sync failed, using Firebase data as fallback')
-//         // Fallback to Firebase user data if Azure sync fails
-//         setCurrentUser({
-//           id: firebaseUser.uid,
-//           userId: firebaseUser.uid,
-//           email: firebaseUser.email,
-//           displayName: firebaseUser.displayName,
-//           photoURL: firebaseUser.photoURL,
-//           isOnline: true
-//         })
-//       }
-//     } catch (err) {
-//       console.error('Error fetching user info:', err)
-//       // Fallback to Firebase user data
-//       setCurrentUser({
-//         id: firebaseUser.uid,
-//         userId: firebaseUser.uid,
-//         email: firebaseUser.email,
-//         displayName: firebaseUser.displayName,
-//         photoURL: firebaseUser.photoURL,
-//         isOnline: true
-//       })
-//     } finally {
-//       setIsLoading(false)
-//       setIsProcessingAuth(false)
-//     }
-//   }
-
-//   const handleLogout = async () => {
-//     try {
-//       // Set user as offline before logout
-//       if (currentUser?.userId) {
-//         await updateUserOnlineStatus(currentUser.userId, false)
-//       }
-      
-//       await signOut(auth)
-//       setCurrentUser(null)
-//       setIsProcessingAuth(false)
-//       toast.success("Logged out successfully!")
-//     } catch (err) {
-//       console.error('Logout error:', err)
-//       toast.error("Failed to logout. Please try again")
-//     }
-//   }
-
-//   // Initialize app by signing out any existing user
-//   useEffect(() => {
-//     const initializeApp = async () => {
-//       if (!hasInitialized) {
-//         try {
-//           // Sign out any existing user to ensure fresh start
-//           await signOut(auth)
-//           console.log('App initialized - user signed out')
-//         } catch (error) {
-//           console.log('No user to sign out on initialization')
-//         } finally {
-//           setHasInitialized(true)
-//           setIsLoading(false)
-//         }
-//       }
-//     }
-
-//     initializeApp()
-//   }, [hasInitialized])
-
-//   // Update user online status when window closes/refreshes
-//   useEffect(() => {
-//     const handleBeforeUnload = () => {
-//       if (currentUser?.userId) {
-//         updateUserOnlineStatus(currentUser.userId, false)
-//       }
-//     }
-
-//     const handleVisibilityChange = () => {
-//       if (currentUser?.userId) {
-//         if (document.visibilityState === 'visible') {
-//           updateUserOnlineStatus(currentUser.userId, true)
-//         } else {
-//           updateUserOnlineStatus(currentUser.userId, false)
-//         }
-//       }
-//     }
-
-//     window.addEventListener('beforeunload', handleBeforeUnload)
-//     document.addEventListener('visibilitychange', handleVisibilityChange)
-
-//     return () => {
-//       window.removeEventListener('beforeunload', handleBeforeUnload)
-//       document.removeEventListener('visibilitychange', handleVisibilityChange)
-//     }
-//   }, [currentUser])
-
-//   useEffect(() => {
-//     // Only listen for auth changes after initialization
-//     if (!hasInitialized) return
-
-//     const unSub = onAuthStateChanged(auth, (user) => {
-//       // Add debounce to prevent rapid fire auth changes
-//       const timeoutId = setTimeout(() => {
-//         if (user) {
-//           fetchUserInfo(user)
-//         } else {
-//           setCurrentUser(null)
-//           setIsLoading(false)
-//           setIsProcessingAuth(false)
-//         }
-//       }, 100) // Small delay to debounce rapid auth changes
-
-//       return () => clearTimeout(timeoutId)
-//     })
-
-//     return () => {
-//       unSub()
-//     }
-//   }, [hasInitialized, isProcessingAuth])
-
-//   const value = {
-//     currentUser,
-//     isLoading,
-//     fetchUserInfo,
-//     handleLogout,
-//     isProcessingAuth,
-//     // Additional helper functions
-//     refreshUserData: () => {
-//       if (auth.currentUser && !isProcessingAuth) {
-//         fetchUserInfo(auth.currentUser)
-//       }
-//     }
-//   }
-
-//   return (
-//     <UserContext.Provider value={value}>
-//       {children}
-//     </UserContext.Provider>
-//   )
-// }
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth, handleUserAuthentication, updateUserOnlineStatus } from './firebase'
@@ -203,6 +19,10 @@ export const UserProvider = ({ children }) => {
   const [hasInitialized, setHasInitialized] = useState(false)
   const [isProcessingAuth, setIsProcessingAuth] = useState(false)
   
+  // // NEW: Blocked users management
+  // const [blockedUsers, setBlockedUsers] = useState([])
+  // const [isLoadingBlocked, setIsLoadingBlocked] = useState(false)
+  
   // Use refs to prevent infinite loops
   const authProcessingRef = useRef(false)
   const currentUserRef = useRef(null)
@@ -213,10 +33,109 @@ export const UserProvider = ({ children }) => {
     currentUserRef.current = currentUser
   }, [currentUser])
 
+  // // NEW: Load blocked users when current user changes
+  // useEffect(() => {
+  //   if (currentUser?.userId) {
+  //     loadBlockedUsers()
+  //   } else {
+  //     setBlockedUsers([])
+  //   }
+  // }, [currentUser])
+
+  // NEW: Load blocked users function
+  // const loadBlockedUsers = async () => {
+  //   if (!currentUser?.userId) return
+  //   setIsLoadingBlocked(true)
+  //   try {
+  //     console.log('📋 Loading blocked users...')
+  //     const result = await getBlockedUsers(currentUser.userId)
+  //     if (result.success) {
+  //       setBlockedUsers(result.blockedUsers || [])
+  //       console.log(`✅ Loaded ${result.blockedUsers?.length || 0} blocked users`)
+  //     } else {
+  //       console.warn('⚠️ Failed to load blocked users:', result.error)
+  //       setBlockedUsers([])
+  //     }
+  //   } catch (error) {
+  //     console.error('❌ Error loading blocked users:', error)
+  //     setBlockedUsers([])
+  //   } finally {
+  //     setIsLoadingBlocked(false)
+  //   }
+  // }
+
+  // NEW: Block user function
+  // const handleBlockUser = async (userToBlockId) => {
+  //   if (!currentUser?.userId || !userToBlockId) {
+  //     toast.error('Unable to block user')
+  //     return { success: false }
+  //   }
+  //   if (userToBlockId === currentUser.userId) {
+  //     toast.error('You cannot block yourself')
+  //     return { success: false }
+  //   }
+  //   if (blockedUsers.some(user => user.userId === userToBlockId)) {
+  //     toast.warn('User is already blocked')
+  //     return { success: false }
+  //   }
+  //   try {
+  //     console.log('🚫 Blocking user:', userToBlockId)
+  //     const result = await blockUser(currentUser.userId, userToBlockId)
+  //     if (result.success) {
+  //       // Refresh blocked users list
+  //       await loadBlockedUsers()
+  //       toast.success('User blocked successfully')
+  //       return { success: true }
+  //     } else {
+  //       toast.error(result.error || 'Failed to block user')
+  //       return { success: false, error: result.error }
+  //     }
+  //   } catch (error) {
+  //     console.error('❌ Error blocking user:', error)
+  //     toast.error('Failed to block user')
+  //     return { success: false, error: error.message }
+  //   }
+  // }
+
+  // NEW: Unblock user function
+  // const handleUnblockUser = async (userToUnblockId) => {
+  //   if (!currentUser?.userId || !userToUnblockId) {
+  //     toast.error('Unable to unblock user')
+  //     return { success: false }
+  //   }
+  //   if (!blockedUsers.some(user => user.userId === userToUnblockId)) {
+  //     toast.warn('User is not blocked')
+  //     return { success: false }
+  //   }
+  //   try {
+  //     console.log('✅ Unblocking user:', userToUnblockId)
+  //     const result = await unblockUser(currentUser.userId, userToUnblockId)
+  //     if (result.success) {
+  //       // Refresh blocked users list
+  //       await loadBlockedUsers()
+  //       toast.success('User unblocked successfully')
+  //       return { success: true }
+  //     } else {
+  //       toast.error(result.error || 'Failed to unblock user')
+  //       return { success: false, error: result.error }
+  //     }
+  //   } catch (error) {
+  //     console.error('❌ Error unblocking user:', error)
+  //     toast.error('Failed to unblock user')
+  //     return { success: false, error: error.message }
+  //   }
+  // }
+
+  // NEW: Check if user is blocked
+  // const isUserBlocked = (userId) => {
+  //   return blockedUsers.some(user => user.userId === userId)
+  // }
+
   const fetchUserInfo = async (firebaseUser) => {
     if (!firebaseUser) {
       console.log('🚪 No Firebase user, clearing state');
       setCurrentUser(null)
+      // setBlockedUsers([]) // Clear blocked users
       setIsLoading(false)
       setIsProcessingAuth(false)
       authProcessingRef.current = false
@@ -239,6 +158,15 @@ export const UserProvider = ({ children }) => {
       
       if (azureUser) {
         console.log('✅ Azure user data received:', azureUser.email)
+        
+        // Ensure user has all required fields including blocked array
+        // const completeUser = {
+        //   ...azureUser,
+        //   blocked: azureUser.blocked || [], // Ensure blocked array exists
+        //   chatContainerName: azureUser.chatContainerName || `chats_${azureUser.userId}` // Fallback container name
+        // }
+        
+        // setCurrentUser(completeUser)
         setCurrentUser(azureUser)
         
         // Set user as online (optional - currently just logs)
@@ -249,6 +177,7 @@ export const UserProvider = ({ children }) => {
         }
         
         console.log('✅ User authentication completed successfully')
+        // console.log('📁 Chat container:', completeUser.chatContainerName)
       } else {
         console.log('⚠️ Azure sync failed, using Firebase data as fallback')
         // Fallback to Firebase user data if Azure sync fails
@@ -259,7 +188,9 @@ export const UserProvider = ({ children }) => {
           displayName: firebaseUser.displayName || '',
           photoURL: firebaseUser.photoURL || '',
           isOnline: true,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          blocked: [], // Initialize empty blocked array
+          chatContainerName: `chats_${firebaseUser.uid}` // Fallback container name
         }
         setCurrentUser(fallbackUser)
       }
@@ -274,7 +205,9 @@ export const UserProvider = ({ children }) => {
         displayName: firebaseUser.displayName || '',
         photoURL: firebaseUser.photoURL || '',
         isOnline: true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        blocked: [], // Initialize empty blocked array
+        chatContainerName: `chats_${firebaseUser.uid}` // Fallback container name
       }
       setCurrentUser(fallbackUser)
     } finally {
@@ -299,6 +232,7 @@ export const UserProvider = ({ children }) => {
       
       // Clear state first
       setCurrentUser(null)
+      // setBlockedUsers([]) // Clear blocked users
       setIsProcessingAuth(false)
       authProcessingRef.current = false
       
@@ -424,6 +358,15 @@ export const UserProvider = ({ children }) => {
     handleLogout,
     isProcessingAuth,
     hasInitialized,
+    
+    // // NEW: Blocked users functionality
+    // blockedUsers,
+    // isLoadingBlocked,
+    // handleBlockUser,
+    // handleUnblockUser,
+    // isUserBlocked,
+    // loadBlockedUsers,
+    
     // Additional helper functions
     refreshUserData: () => {
       if (auth.currentUser && !authProcessingRef.current) {
@@ -432,6 +375,11 @@ export const UserProvider = ({ children }) => {
       } else {
         console.log('⚠️ Cannot refresh - no user or auth in progress')
       }
+    },
+    
+    // NEW: Get chat container name for current user
+    getChatContainerName: () => {
+      return currentUser?.chatContainerName || null
     }
   }
 
