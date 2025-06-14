@@ -25,13 +25,44 @@ const userCreationPromises = new Map();
 const processedUsers = new Set(); // Track already processed users
 
 // Helper function to check if server is running
+// Replace the checkServerRunning function in firebase.js with this:
 const checkServerRunning = async () => {
   try {
-    const response = await apiService.healthCheck();
-    return response && (response.status === 'ok' || response.success === true);
+    console.log('🔍 Checking server health using apiService...');
+    
+    // Use your existing apiService instead of direct fetch
+    const data = await apiService.healthCheck();
+    console.log('✅ Server health check response:', data);
+    
+    // Check if the response indicates server is running
+    return data && (data.status === 'ok' || data.success === true || data.message);
   } catch (error) {
-    console.warn('Server health check failed:', error.message);
-    return false;
+    console.error('❌ Server health check failed:', error.message);
+    console.error('❌ Full error:', error);
+    
+    // Try direct fetch as fallback
+    try {
+      console.log('🔄 Trying direct fetch as fallback...');
+      const response = await fetch('http://localhost:3001/api/health', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      });
+      
+      if (!response.ok) {
+        console.error(`❌ Direct fetch failed with status: ${response.status}`);
+        return false;
+      }
+      
+      const data = await response.json();
+      console.log('✅ Direct fetch success:', data);
+      return true;
+    } catch (directError) {
+      console.error('❌ Direct fetch also failed:', directError.message);
+      return false;
+    }
   }
 };
 
@@ -39,45 +70,41 @@ const checkServerRunning = async () => {
 export const handleUserAuthentication = async (user) => {
   if (!user) {
     console.log('🚪 User signed out');
-    // Clear processed users when signing out
     processedUsers.clear();
     return null;
   }
 
   console.log('🔐 User signed in:', user.displayName || user.email);
 
-  // Check if we've already processed this user successfully
   if (processedUsers.has(user.uid)) {
     console.log('✅ User already processed, fetching existing data...');
     try {
       const result = await apiService.getUserByUid(user.uid);
+      console.log('📁 Fetched user from Azure DB:', result.user.email);
       return result.user;
     } catch (error) {
       console.log('⚠️ Previously processed user not found, will recreate...');
-      processedUsers.delete(user.uid); // Remove from processed set
+      processedUsers.delete(user.uid);
     }
   }
 
-  // Check if we're already handling this user
   if (userCreationPromises.has(user.uid)) {
     console.log('⏳ User creation already in progress, waiting...');
     try {
       return await userCreationPromises.get(user.uid);
     } catch (error) {
-      // If the promise failed, remove it and try again
       userCreationPromises.delete(user.uid);
       console.log('🔄 Previous user creation failed, retrying...');
     }
   }
 
-  // Create the user handling promise
   const userPromise = handleUserCreation(user);
   userCreationPromises.set(user.uid, userPromise);
 
   try {
     const result = await userPromise;
     if (result) {
-      // Mark user as successfully processed
+      console.log('🟢 Marking user as processed');
       processedUsers.add(user.uid);
     }
     return result;
@@ -85,38 +112,34 @@ export const handleUserAuthentication = async (user) => {
     console.error('❌ User authentication failed:', error.message);
     return null;
   } finally {
-    // Clean up the promise after completion
     userCreationPromises.delete(user.uid);
   }
 };
 
+
 const handleUserCreation = async (user) => {
   try {
     console.log('🔍 Checking if user exists in Azure DB...');
-    
-    // First, check if server is running using healthCheck
+
     const isServerRunning = await checkServerRunning();
+    console.log(`🖥️ Server running: ${isServerRunning}`);
     if (!isServerRunning) {
       console.error('❌ Backend server is not running on http://localhost:3001');
       throw new Error('Backend server is not accessible. Please start your server.');
     }
 
-    // Try to get existing user first
     try {
       const result = await apiService.getUserByUid(user.uid);
       console.log('✅ User already exists in Azure DB:', result.user.email);
       return result.user;
     } catch (error) {
-      // User doesn't exist, check if it's actually a "not found" error
       if (!error.message.includes('User not found')) {
         console.error('❌ Unexpected error checking user:', error.message);
         throw error;
       }
-      
-      console.log('👤 User not found, creating new user in Azure DB...');
+      console.log('👤 User not found, preparing to register user and chat container...');
     }
 
-    // Create user data
     const userData = {
       uid: user.uid,
       email: user.email,
@@ -127,17 +150,18 @@ const handleUserCreation = async (user) => {
       isOnline: true
     };
 
-    console.log('📝 Creating user with data:', {
+    console.log('📝 Sending data to registerUserWithChatContainer:', {
       uid: userData.uid,
       email: userData.email,
       displayName: userData.displayName
     });
 
-    // Create user in Azure DB
-    const result = await apiService.createUser(userData);
-    
+    const result = await apiService.registerUserWithChatContainer(userData);
+
     if (result.success && result.user) {
-      console.log('✅ User created and synced with Azure DB successfully');
+      console.log('✅ User + chat container created successfully');
+      console.log(`📁 Chat container name: ${result.chatContainerName}`);
+      console.log(`🆕 Container was ${result.containerCreated ? 'newly created' : 'already existing'}`);
       return result.user;
     } else {
       console.error('❌ Failed to create user in Azure DB:', result.error || 'Unknown error');
@@ -146,15 +170,10 @@ const handleUserCreation = async (user) => {
 
   } catch (error) {
     console.error('❌ Error in handleUserCreation:', error.message);
-    
-    // If it's a network error, provide helpful message
-    if (error.message.includes('Cannot connect to server')) {
-      throw new Error('Cannot connect to backend server. Please ensure your server is running on http://localhost:3001');
-    }
-    
     throw error;
   }
 };
+
 
 // Update user online status - Enhanced with error handling
 export const updateUserOnlineStatus = async (userId, isOnline) => {
