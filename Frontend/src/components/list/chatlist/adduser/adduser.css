@@ -1,0 +1,75 @@
+.adduser {
+    width: 350px;
+    background-color: rgba(17, 25, 40, 0.79);
+    border-radius: 10px;
+    padding: 30px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.adduser form {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.adduser form input {
+    padding: 10px;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+    flex: 1;
+}
+
+.adduser form button {
+    padding: 10px;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+    background-color: #1a73e8;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.adduser form button:hover {
+    background-color: #1557b0;
+}
+
+.user {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+}
+
+.user .detail {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.user .detail img {
+    height: 50px;
+    width: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.user button {
+    padding: 10px ;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+    background-color: #1a73e8;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.user button:hover {
+    background-color: #1557b0;
+}
