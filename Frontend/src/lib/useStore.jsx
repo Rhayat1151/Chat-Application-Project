@@ -19,10 +19,6 @@ export const UserProvider = ({ children }) => {
   const [hasInitialized, setHasInitialized] = useState(false)
   const [isProcessingAuth, setIsProcessingAuth] = useState(false)
   
-  // // NEW: Blocked users management
-  // const [blockedUsers, setBlockedUsers] = useState([])
-  // const [isLoadingBlocked, setIsLoadingBlocked] = useState(false)
-  
   // Use refs to prevent infinite loops
   const authProcessingRef = useRef(false)
   const currentUserRef = useRef(null)
@@ -33,189 +29,83 @@ export const UserProvider = ({ children }) => {
     currentUserRef.current = currentUser
   }, [currentUser])
 
-  // // NEW: Load blocked users when current user changes
-  // useEffect(() => {
-  //   if (currentUser?.userId) {
-  //     loadBlockedUsers()
-  //   } else {
-  //     setBlockedUsers([])
-  //   }
-  // }, [currentUser])
+  // Fetch user info and sync with backend
+// In your fetchUserInfo function, make the user object consistent:
 
-  // NEW: Load blocked users function
-  // const loadBlockedUsers = async () => {
-  //   if (!currentUser?.userId) return
-  //   setIsLoadingBlocked(true)
-  //   try {
-  //     console.log('📋 Loading blocked users...')
-  //     const result = await getBlockedUsers(currentUser.userId)
-  //     if (result.success) {
-  //       setBlockedUsers(result.blockedUsers || [])
-  //       console.log(`✅ Loaded ${result.blockedUsers?.length || 0} blocked users`)
-  //     } else {
-  //       console.warn('⚠️ Failed to load blocked users:', result.error)
-  //       setBlockedUsers([])
-  //     }
-  //   } catch (error) {
-  //     console.error('❌ Error loading blocked users:', error)
-  //     setBlockedUsers([])
-  //   } finally {
-  //     setIsLoadingBlocked(false)
-  //   }
-  // }
+const fetchUserInfo = async (firebaseUser) => {
+  if (!firebaseUser) {
+    console.log('🚪 No Firebase user, clearing state');
+    setCurrentUser(null)
+    setIsLoading(false)
+    setIsProcessingAuth(false)
+    authProcessingRef.current = false
+    return
+  }
 
-  // NEW: Block user function
-  // const handleBlockUser = async (userToBlockId) => {
-  //   if (!currentUser?.userId || !userToBlockId) {
-  //     toast.error('Unable to block user')
-  //     return { success: false }
-  //   }
-  //   if (userToBlockId === currentUser.userId) {
-  //     toast.error('You cannot block yourself')
-  //     return { success: false }
-  //   }
-  //   if (blockedUsers.some(user => user.userId === userToBlockId)) {
-  //     toast.warn('User is already blocked')
-  //     return { success: false }
-  //   }
-  //   try {
-  //     console.log('🚫 Blocking user:', userToBlockId)
-  //     const result = await blockUser(currentUser.userId, userToBlockId)
-  //     if (result.success) {
-  //       // Refresh blocked users list
-  //       await loadBlockedUsers()
-  //       toast.success('User blocked successfully')
-  //       return { success: true }
-  //     } else {
-  //       toast.error(result.error || 'Failed to block user')
-  //       return { success: false, error: result.error }
-  //     }
-  //   } catch (error) {
-  //     console.error('❌ Error blocking user:', error)
-  //     toast.error('Failed to block user')
-  //     return { success: false, error: error.message }
-  //   }
-  // }
+  if (authProcessingRef.current) return;
+  authProcessingRef.current = true;
+  setIsProcessingAuth(true);
 
-  // NEW: Unblock user function
-  // const handleUnblockUser = async (userToUnblockId) => {
-  //   if (!currentUser?.userId || !userToUnblockId) {
-  //     toast.error('Unable to unblock user')
-  //     return { success: false }
-  //   }
-  //   if (!blockedUsers.some(user => user.userId === userToUnblockId)) {
-  //     toast.warn('User is not blocked')
-  //     return { success: false }
-  //   }
-  //   try {
-  //     console.log('✅ Unblocking user:', userToUnblockId)
-  //     const result = await unblockUser(currentUser.userId, userToUnblockId)
-  //     if (result.success) {
-  //       // Refresh blocked users list
-  //       await loadBlockedUsers()
-  //       toast.success('User unblocked successfully')
-  //       return { success: true }
-  //     } else {
-  //       toast.error(result.error || 'Failed to unblock user')
-  //       return { success: false, error: result.error }
-  //     }
-  //   } catch (error) {
-  //     console.error('❌ Error unblocking user:', error)
-  //     toast.error('Failed to unblock user')
-  //     return { success: false, error: error.message }
-  //   }
-  // }
-
-  // NEW: Check if user is blocked
-  // const isUserBlocked = (userId) => {
-  //   return blockedUsers.some(user => user.userId === userId)
-  // }
-
-  const fetchUserInfo = async (firebaseUser) => {
-    if (!firebaseUser) {
-      console.log('🚪 No Firebase user, clearing state');
-      setCurrentUser(null)
-      // setBlockedUsers([]) // Clear blocked users
-      setIsLoading(false)
-      setIsProcessingAuth(false)
-      authProcessingRef.current = false
-      return
-    }
-
-    // Prevent multiple simultaneous auth processing
-    if (authProcessingRef.current) {
-      console.log('⏳ Auth already in progress, skipping...')
-      return
-    }
-
-    authProcessingRef.current = true
-    setIsProcessingAuth(true)
-    console.log('🔄 Processing user authentication for:', firebaseUser.email)
-
-    try {
-      // Handle user authentication and sync with Azure DB
-      const azureUser = await handleUserAuthentication(firebaseUser)
+  try {
+    const azureUser = await handleUserAuthentication(firebaseUser);
+    
+    if (azureUser) {
+      // Always preserve existing photoURL if Azure doesn't return one
+      const finalPhotoURL = (azureUser.photoURL && azureUser.photoURL.trim()) ? azureUser.photoURL : '';
+      console.log('azureUser.photoURL:', azureUser.photoURL);
+      console.log('currentUserRef.current?.photoURL:', currentUserRef.current?.photoURL);
+      console.log('finalPhotoURL:', finalPhotoURL);
       
-      if (azureUser) {
-        console.log('✅ Azure user data received:', azureUser.email)
-        
-        // Ensure user has all required fields including blocked array
-        // const completeUser = {
-        //   ...azureUser,
-        //   blocked: azureUser.blocked || [], // Ensure blocked array exists
-        //   chatContainerName: azureUser.chatContainerName || `chats_${azureUser.userId}` // Fallback container name
-        // }
-        
-        // setCurrentUser(completeUser)
-        setCurrentUser(azureUser)
-        
-        // Set user as online (optional - currently just logs)
-        try {
-          await updateUserOnlineStatus(firebaseUser.uid, true)
-        } catch (onlineError) {
-          console.warn('⚠️ Failed to update online status:', onlineError.message)
-        }
-        
-        console.log('✅ User authentication completed successfully')
-        // console.log('📁 Chat container:', completeUser.chatContainerName)
-      } else {
-        console.log('⚠️ Azure sync failed, using Firebase data as fallback')
-        // Fallback to Firebase user data if Azure sync fails
-        const fallbackUser = {
-          id: firebaseUser.uid,
-          userId: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName || '',
-          photoURL: firebaseUser.photoURL || '',
-          isOnline: true,
-          createdAt: new Date().toISOString(),
-          blocked: [], // Initialize empty blocked array
-          chatContainerName: `chats_${firebaseUser.uid}` // Fallback container name
-        }
-        setCurrentUser(fallbackUser)
-      }
-    } catch (err) {
-      console.error('❌ Error during user authentication:', err)
+      // Make user object consistent with both uid and userId
+      setCurrentUser({
+        ...azureUser,
+        uid: firebaseUser.uid,          // Add this for consistency
+        userId: azureUser.userId || firebaseUser.uid,  // Keep existing userId
+        photoURL: finalPhotoURL
+      });
       
-      // Fallback to Firebase user data
+      await updateUserOnlineStatus(firebaseUser.uid, true);
+    } else {
+      // Create fallback user with consistent properties
       const fallbackUser = {
         id: firebaseUser.uid,
+        uid: firebaseUser.uid,          // Add this for consistency
         userId: firebaseUser.uid,
         email: firebaseUser.email,
         displayName: firebaseUser.displayName || '',
-        photoURL: firebaseUser.photoURL || '',
+        photoURL: currentUserRef.current?.photoURL || '',
         isOnline: true,
         createdAt: new Date().toISOString(),
-        blocked: [], // Initialize empty blocked array
-        chatContainerName: `chats_${firebaseUser.uid}` // Fallback container name
-      }
-      setCurrentUser(fallbackUser)
-    } finally {
-      setIsLoading(false)
-      setIsProcessingAuth(false)
-      authProcessingRef.current = false
+        blocked: [],
+        chatContainerName: `chats_${firebaseUser.uid}`
+      };
+      
+      setCurrentUser(fallbackUser);
     }
+  } catch (err) {
+    console.error('❌ Error during user authentication:', err);
+    
+    // Error fallback with consistent properties
+    const fallbackUser = {
+      id: firebaseUser.uid,
+      uid: firebaseUser.uid,          // Add this for consistency
+      userId: firebaseUser.uid,
+      email: firebaseUser.email,
+      displayName: firebaseUser.displayName || '',
+      photoURL: currentUserRef.current?.photoURL || '',
+      isOnline: true,
+      createdAt: new Date().toISOString(),
+      blocked: [],
+      chatContainerName: `chats_${firebaseUser.uid}`
+    };
+    
+    setCurrentUser(fallbackUser);
+  } finally {
+    setIsLoading(false);
+    setIsProcessingAuth(false);
+    authProcessingRef.current = false;
   }
+}
 
   const handleLogout = async () => {
     try {
@@ -232,7 +122,6 @@ export const UserProvider = ({ children }) => {
       
       // Clear state first
       setCurrentUser(null)
-      // setBlockedUsers([]) // Clear blocked users
       setIsProcessingAuth(false)
       authProcessingRef.current = false
       
@@ -285,13 +174,12 @@ export const UserProvider = ({ children }) => {
         clearTimeout(initTimeoutRef.current)
       }
     }
-  }, []) // Remove hasInitialized dependency to prevent re-runs
+  }, [])
 
   // Handle window events for online status
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (currentUserRef.current?.userId) {
-        // Use synchronous approach for beforeunload
         navigator.sendBeacon('/api/user-offline', JSON.stringify({
           userId: currentUserRef.current.userId
         }))
@@ -316,11 +204,10 @@ export const UserProvider = ({ children }) => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, []) // Empty dependency array since we use refs
+  }, [])
 
   // Auth state listener
   useEffect(() => {
-    // Only listen for auth changes after initialization
     if (!hasInitialized) return
 
     console.log('👂 Setting up auth state listener...')
@@ -328,17 +215,14 @@ export const UserProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       console.log('🔔 Auth state changed:', user ? user.email : 'No user')
       
-      // Clear any existing timeout to prevent race conditions
       if (initTimeoutRef.current) {
         clearTimeout(initTimeoutRef.current)
       }
       
-      // Use a small delay to debounce rapid auth changes
       const timeoutId = setTimeout(() => {
         fetchUserInfo(user)
       }, 300)
 
-      // Store timeout for cleanup
       initTimeoutRef.current = timeoutId
     })
 
@@ -358,16 +242,7 @@ export const UserProvider = ({ children }) => {
     handleLogout,
     isProcessingAuth,
     hasInitialized,
-    
-    // // NEW: Blocked users functionality
-    // blockedUsers,
-    // isLoadingBlocked,
-    // handleBlockUser,
-    // handleUnblockUser,
-    // isUserBlocked,
-    // loadBlockedUsers,
-    
-    // Additional helper functions
+    setCurrentUser, // Add this function to the context
     refreshUserData: () => {
       if (auth.currentUser && !authProcessingRef.current) {
         console.log('🔄 Manually refreshing user data...')
@@ -376,8 +251,6 @@ export const UserProvider = ({ children }) => {
         console.log('⚠️ Cannot refresh - no user or auth in progress')
       }
     },
-    
-    // NEW: Get chat container name for current user
     getChatContainerName: () => {
       return currentUser?.chatContainerName || null
     }

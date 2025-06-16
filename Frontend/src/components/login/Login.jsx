@@ -5,8 +5,12 @@ import './login.css';
 import { auth } from '../../lib/firebase';
 import { apiService } from '../../lib/api';
 import { toast } from 'react-toastify';
+import { useUserStore } from '../../lib/useStore';
 
 const Login = () => {
+  // Move the hook call INSIDE the component
+  const { setCurrentUser } = useUserStore();
+  
   const [avatar, setAvatar] = useState({
     file: null,
     url: ""
@@ -16,10 +20,26 @@ const Login = () => {
 
   const handleAvatar = (e) => {
     if (e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error("Please select an image file");
+        return;
+      }
+      
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image size should be less than 5MB");
+        return;
+      }
+      
       setAvatar({
-        file: e.target.files[0],
-        url: URL.createObjectURL(e.target.files[0])
+        file: file,
+        url: URL.createObjectURL(file)
       });
+      
+      console.log('📸 Image selected:', file.name, 'Size:', (file.size / 1024 / 1024).toFixed(2) + 'MB');
     }
   };
 
@@ -27,55 +47,72 @@ const Login = () => {
     e.preventDefault();
     if (registerLoading) return;
     setRegisterLoading(true);
-
+  
     try {
       const formData = new FormData(e.target);
       const { username, email, password } = Object.fromEntries(formData);
 
-      if (!username || !email || !password) {
-        toast.error("Please fill in all fields");
-        setRegisterLoading(false);
+      console.log('🚀 Starting registration process...');
+      
+      // Validate inputs
+      if (!username.trim()) {
+        toast.error("Username is required");
         return;
       }
-
+      if (!email.trim()) {
+        toast.error("Email is required");
+        return;
+      }
       if (password.length < 6) {
         toast.error("Password must be at least 6 characters");
-        setRegisterLoading(false);
         return;
       }
-
-      // Create user in Firebase
+  
+      // 1. Create Firebase user
+      console.log('🔐 Creating Firebase user...');
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-
-      // Save user to Azure Cosmos DB via backend API
+      console.log('✅ Firebase user created:', user.uid);
+  
+      // 2. Use the combined registration method
       const userData = {
         uid: user.uid,
         email: user.email,
-        displayName: username,
-        photoURL: avatar.url || '',
-        createdAt: new Date().toISOString(),
-        blocked: []
+        displayName: username.trim(),
+        photoURL: '', // Will be set by the upload if file exists
+        createdAt: new Date().toISOString()
       };
 
-      const result = await apiService.createUser(userData);
-
-      if (result.success) {
+      console.log('👤 Registering with backend...');
+      const registerResponse = await apiService.registerUserWithImageAndChat(userData, avatar.file);
+  
+      // 3. Update currentUser state with the complete response
+      if (registerResponse && registerResponse.user) {
+        console.log('🔥 Full registration response:', registerResponse);
+        setCurrentUser(registerResponse.user);
         toast.success("Account created successfully!");
+        
+        // Reset form and avatar
         e.target.reset();
         setAvatar({ file: null, url: "" });
       } else {
-        toast.error("Account created but failed to sync. Please try logging in.");
+        console.error('❌ Invalid registration response:', registerResponse);
+        toast.error("Registration completed but response was invalid");
       }
     } catch (error) {
+      console.error('❌ Registration error:', error);
+      
+      // Provide specific error messages
       if (error.code === 'auth/email-already-in-use') {
-        toast.error("Email is already registered. Please use a different email or try logging in.");
+        toast.error("An account with this email already exists. Please use a different email or try logging in.");
       } else if (error.code === 'auth/weak-password') {
-        toast.error("Password is too weak. Please use a stronger password.");
+        toast.error("Password is too weak. Please choose a stronger password.");
       } else if (error.code === 'auth/invalid-email') {
         toast.error("Invalid email address. Please check your email.");
+      } else if (error.message.includes('Network')) {
+        toast.error("Network error. Please check your connection and try again.");
       } else {
-        toast.error(error.message || "Failed to create account. Please try again.");
+        toast.error(error.message || "Registration failed. Please try again.");
       }
     } finally {
       setRegisterLoading(false);
@@ -97,12 +134,16 @@ const Login = () => {
         return;
       }
 
+      console.log('🔐 Logging in user...');
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      toast.success("Logged in successfully!");
+      console.log('✅ Login successful:', user.uid);
+      toast.success("Welcome back! 👋");
       e.target.reset();
     } catch (error) {
+      console.error('❌ Login error:', error);
+      
       if (error.code === 'auth/user-not-found') {
         toast.error("No account found with this email. Please check your email or create an account.");
       } else if (error.code === 'auth/wrong-password') {
@@ -149,9 +190,16 @@ const Login = () => {
       <div className="item">
         <h2>Create an Account</h2>
         <form onSubmit={handleRegister}>
-          <label htmlFor="file">
+          <label htmlFor="file" className={registerLoading ? 'disabled' : ''}>
             <img src={avatar.url || "./avatar.png"} alt="Avatar preview" />
-            Upload an image
+            <span className="upload-text">
+              {avatar.file ? `✅ ${avatar.file.name}` : "📸 Upload Profile Image"}
+            </span>
+            {avatar.file && (
+              <small className="file-info">
+                Size: {(avatar.file.size / 1024 / 1024).toFixed(2)}MB
+              </small>
+            )}
           </label>
           <input 
             type="file" 
@@ -187,8 +235,20 @@ const Login = () => {
             minLength="6"
           />
           <button disabled={registerLoading} type="submit">
-            {registerLoading ? "Creating Account..." : "Sign Up"}
+            {registerLoading ? (
+              <>
+                <span className="loading-spinner">⏳</span>
+                Creating Account...
+              </>
+            ) : (
+              "Sign Up"
+            )}
           </button>
+          {registerLoading && (
+            <div className="registration-status">
+              <small>🔄 Setting up your account and uploading profile image...</small>
+            </div>
+          )}
         </form>
       </div>
     </div>

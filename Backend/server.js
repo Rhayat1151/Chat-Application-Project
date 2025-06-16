@@ -1,10 +1,34 @@
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const sharp = require('sharp');
 const { CosmosClient } = require('@azure/cosmos');
+const { BlobServiceClient } = require('@azure/storage-blob');
 require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3001;
+
+// Azure Blob Storage setup
+const blobServiceClient = BlobServiceClient.fromConnectionString(
+  process.env.AZURE_STORAGE_CONNECTION_STRING
+);
+const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || 'profile-images';
+
+// Configure multer for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  },
+});
 
 // Middleware - FIXED: Single CORS configuration
 app.use(cors({
@@ -30,6 +54,44 @@ const cosmosClient = new CosmosClient({
 const database = cosmosClient.database(process.env.COSMOS_DB_DATABASE);
 const userContainer = database.container(process.env.COSMOS_DB_CONTAINER);
 
+// Helper function to upload image to Azure Blob Storage
+const uploadImageToBlob = async (buffer, fileName, contentType) => {
+  try {
+    // Process image with sharp (resize and optimize)
+    const processedBuffer = await sharp(buffer)
+      .resize(300, 300, { 
+        fit: 'cover',
+        position: 'center'
+      })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    // Generate unique filename
+    const uniqueFileName = `${Date.now()}_${fileName}`;
+    
+    // Get block blob client
+    const blockBlobClient = blobServiceClient
+      .getContainerClient(containerName)
+      .getBlockBlobClient(uniqueFileName);
+    
+    // Upload options
+    const uploadOptions = {
+      blobHTTPHeaders: {
+        blobContentType: 'image/jpeg'
+      }
+    };
+
+    // Upload the file using uploadData
+    await blockBlobClient.uploadData(processedBuffer, uploadOptions);
+    
+    // Return the URL
+    return blockBlobClient.url;
+  } catch (error) {
+    console.error('Error uploading image to blob storage:', error);
+    throw new Error('Failed to upload image');
+  }
+};
+
 // Helper function to generate chat container name
 const generateChatContainerName = (user) => {
   const emailPrefix = user.email ? user.email.split('@')[0] : '';
@@ -42,10 +104,10 @@ const generateChatContainerName = (user) => {
   return `${cleanName}_${uid}_chats`;
 };
 
-// Helper function to create chat container
-const createChatContainer = async (containerName) => {
+// UPDATED: Helper function to create chat container with user ID
+const createChatContainer = async (containerName, userUid) => {
   try {
-    console.log(`📁 Creating chat container: ${containerName}`);
+    console.log(`📁 Creating chat container: ${containerName} for user: ${userUid}`);
     
     const { container } = await database.containers.createIfNotExists({
       id: containerName,
@@ -55,9 +117,9 @@ const createChatContainer = async (containerName) => {
       }
     });
 
-    // Add a welcome message to initialize the container
+    // Add a welcome message with the user's ID as the document ID
     await container.items.create({
-      id: "welcome_message",
+      id: userUid, // CHANGED: Using user's UID as document ID
       chatId: "system",
       messageType: "system",
       message: "Welcome to your personal chat container!",
@@ -65,7 +127,7 @@ const createChatContainer = async (containerName) => {
       createdAt: new Date().toISOString()
     });
 
-    console.log(`✅ Chat container created successfully: ${containerName}`);
+    console.log(`✅ Chat container created successfully: ${containerName} with document ID: ${userUid}`);
     return { success: true, containerName };
   } catch (error) {
     if (error.code === 409) {
@@ -83,6 +145,39 @@ const createChatContainer = async (containerName) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
+});
+
+// NEW: Image upload endpoint
+app.post('/api/upload-profile-image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    console.log('📸 Uploading profile image...');
+    
+    // Upload to Azure Blob Storage
+    const imageUrl = await uploadImageToBlob(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    console.log('✅ Image uploaded successfully:', imageUrl);
+
+    res.json({
+      success: true,
+      imageUrl: imageUrl,
+      message: 'Image uploaded successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error uploading image:', error);
+    res.status(500).json({
+      error: 'Failed to upload image',
+      details: error.message
+    });
+  }
 });
 
 // Create or update user
@@ -121,64 +216,51 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-// NEW: Create user with chat container (combined registration)
+// UPDATED: Register user with chat container and image support
+// UPDATED: Register user with chat container and image support
+// UPDATED: Register user with chat container and image support
 app.post('/api/users/register-with-chat', async (req, res) => {
   try {
-    const { uid, email, displayName, photoURL, createdAt, blocked = [] } = req.body;
+    const { uid, email, displayName, photoURL } = req.body;
     
+    // Validate required fields
     if (!uid || !email) {
       return res.status(400).json({ error: 'UID and email are required' });
     }
-
-    // Generate chat container name
-    const chatContainerName = generateChatContainerName({ uid, email, displayName });
-    
-    console.log(`🚀 Starting user registration with chat container for: ${email}`);
-    console.log(`📁 Generated container name: ${chatContainerName}`);
 
     // Create user document
     const userDoc = {
       id: uid,
       uid,
       email,
-      displayName: displayName || email.split('@')[0] || 'User',
-      photoURL: photoURL || '',
-      createdAt: createdAt || new Date().toISOString(),
+      displayName: displayName || email.split('@')[0],
+      photoURL: photoURL || '', // Ensure this is never undefined
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      blocked: blocked,
       isOnline: true,
-      chatContainerName: chatContainerName
+      blocked: []
     };
 
-    // Create user first
-    console.log('👤 Creating user document...');
+    // Save to Cosmos DB
     const { resource: createdUser } = await userContainer.items.upsert(userDoc);
-    console.log('✅ User document created successfully');
-
-    // Create chat container
-    console.log('📁 Creating chat container...');
-    const containerResult = await createChatContainer(chatContainerName);
     
-    if (containerResult.success) {
-      console.log('✅ User registration with chat container completed successfully');
-      res.status(200).json({
-        success: true,
-        user: createdUser,
-        chatContainerName: chatContainerName,
-        containerCreated: !containerResult.existed
-      });
-    } else {
-      console.error('❌ Failed to create chat container');
-      res.status(500).json({
-        error: 'User created but failed to create chat container',
-        user: createdUser
-      });
-    }
+    // Create chat container
+    const chatContainerName = generateChatContainerName(createdUser);
+    await createChatContainer(chatContainerName, uid);
 
+    // Return user data with ALL fields including photoURL
+    res.json({
+      success: true,
+      user: {
+        ...createdUser, // This includes all fields from the database
+        chatContainerName,
+        photoURL: createdUser.photoURL || photoURL || '' // Ensure photoURL is included
+      }
+    });
   } catch (error) {
-    console.error('❌ Error in register-with-chat:', error);
+    console.error('Registration error:', error);
     res.status(500).json({ 
-      error: 'Failed to register user with chat container',
+      error: 'Registration failed',
       details: error.message 
     });
   }
@@ -209,6 +291,81 @@ app.get('/api/users/:uid', async (req, res) => {
         details: error.message 
       });
     }
+  }
+});
+
+
+// Enhanced upload endpoint
+app.post('/api/upload-profile-image', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image provided' });
+    }
+
+    const imageUrl = await uploadImageToBlob(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    res.json({
+      success: true,
+      imageUrl,
+      message: 'Image uploaded successfully'
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({
+      error: 'Failed to upload image',
+      details: error.message
+    });
+  }
+});
+
+// Enhanced registration endpoint
+app.post('/api/users/register-with-chat', async (req, res) => {
+  try {
+    const { uid, email, displayName, photoURL = '' } = req.body;
+    
+    // Validate required fields
+    if (!uid || !email) {
+      return res.status(400).json({ error: 'UID and email are required' });
+    }
+
+    // Create user document
+    const userDoc = {
+      id: uid,
+      uid,
+      email,
+      displayName: displayName || email.split('@')[0],
+      photoURL: photoURL || '', // Ensure this is never undefined
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isOnline: true,
+      blocked: []
+    };
+
+    // Save to Cosmos DB
+    const { resource: createdUser } = await userContainer.items.upsert(userDoc);
+    
+    // Create chat container
+    const chatContainerName = generateChatContainerName(createdUser);
+    await createChatContainer(chatContainerName, uid);
+
+    // Return user data with the photoURL
+    res.json({
+      success: true,
+      user: {
+        ...createdUser,
+        chatContainerName
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ 
+      error: 'Registration failed',
+      details: error.message 
+    });
   }
 });
 
@@ -401,18 +558,18 @@ app.get('/api/users/:uid/blocked', async (req, res) => {
   }
 });
 
-// NEW: Chat container management endpoints
+// Chat container management endpoints
 
-// Create chat container manually
+// UPDATED: Create chat container manually with optional user ID
 app.post('/api/chats/container', async (req, res) => {
   try {
-    const { containerName } = req.body;
+    const { containerName, userUid } = req.body;
     
     if (!containerName) {
       return res.status(400).json({ error: 'Container name is required' });
     }
     
-    const result = await createChatContainer(containerName);
+    const result = await createChatContainer(containerName, userUid);
     res.json(result);
   } catch (error) {
     console.error('Error creating chat container:', error);
@@ -521,6 +678,8 @@ app.listen(port, () => {
   console.log('   ✅ User registration with automatic chat container creation');
   console.log('   ✅ Block/Unblock user functionality');
   console.log('   ✅ Chat container management');
+  console.log('   ✅ Profile image upload to Azure Blob Storage');
   console.log('   ✅ CORS configured for multiple origins');
   console.log('   ✅ Error handling middleware');
+  console.log('   ✅ Chat container documents use user UID as document ID');
 });

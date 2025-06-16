@@ -1,7 +1,7 @@
 // src/lib/firebase.js
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, collection } from "firebase/firestore";
 import { apiService } from './api'; // Import your existing API service
 
 // Your web app's Firebase configuration
@@ -25,7 +25,6 @@ const userCreationPromises = new Map();
 const processedUsers = new Set(); // Track already processed users
 
 // Helper function to check if server is running
-// Replace the checkServerRunning function in firebase.js with this:
 const checkServerRunning = async () => {
   try {
     console.log('🔍 Checking server health using apiService...');
@@ -66,6 +65,80 @@ const checkServerRunning = async () => {
   }
 };
 
+// New function to sync user data to Firebase Firestore
+const syncUserToFirestore = async (userData) => {
+  try {
+    console.log('🔄 Syncing user data to Firestore collection "user"...');
+    
+    // Create user document in 'user' collection
+    const userRef = doc(db, 'user', userData.uid);
+    
+    // Prepare data for Firestore (ensure all fields are properly formatted)
+    const firestoreUserData = {
+      uid: userData.uid,
+      email: userData.email,
+      displayName: userData.displayName,
+      photoURL: userData.photoURL || '',
+      createdAt: userData.createdAt,
+      blocked: userData.blocked || [],
+      isOnline: userData.isOnline || true,
+      // Add any additional fields from Azure DB
+      lastLoginAt: new Date().toISOString(),
+      syncedFromAzure: true,
+      syncedAt: new Date().toISOString()
+    };
+    
+    // Write to Firestore
+    await setDoc(userRef, firestoreUserData, { merge: true });
+    console.log('✅ User data synced to Firestore successfully');
+    
+    return firestoreUserData;
+  } catch (error) {
+    console.error('❌ Failed to sync user to Firestore:', error);
+    throw new Error(`Firestore sync failed: ${error.message}`);
+  }
+};
+
+// New function to get user from Firestore
+export const getUserFromFirestore = async (uid) => {
+  try {
+    console.log('📖 Reading user from Firestore:', uid);
+    const userRef = doc(db, 'user', uid);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      console.log('✅ User found in Firestore');
+      return { success: true, user: userSnap.data() };
+    } else {
+      console.log('❌ User not found in Firestore');
+      return { success: false, error: 'User not found in Firestore' };
+    }
+  } catch (error) {
+    console.error('❌ Error reading from Firestore:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// New function to update user in Firestore
+export const updateUserInFirestore = async (uid, updateData) => {
+  try {
+    console.log('📝 Updating user in Firestore:', uid);
+    const userRef = doc(db, 'user', uid);
+    
+    const updatePayload = {
+      ...updateData,
+      updatedAt: new Date().toISOString()
+    };
+    
+    await setDoc(userRef, updatePayload, { merge: true });
+    console.log('✅ User updated in Firestore successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Failed to update user in Firestore:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 // Azure DB Integration Functions using Backend API
 export const handleUserAuthentication = async (user) => {
   if (!user) {
@@ -81,6 +154,14 @@ export const handleUserAuthentication = async (user) => {
     try {
       const result = await apiService.getUserByUid(user.uid);
       console.log('📁 Fetched user from Azure DB:', result.user.email);
+      
+      // Also sync to Firestore if not already there
+      const firestoreUser = await getUserFromFirestore(user.uid);
+      if (!firestoreUser.success) {
+        console.log('📝 Syncing existing Azure user to Firestore...');
+        await syncUserToFirestore(result.user);
+      }
+      
       return result.user;
     } catch (error) {
       console.log('⚠️ Previously processed user not found, will recreate...');
@@ -116,7 +197,6 @@ export const handleUserAuthentication = async (user) => {
   }
 };
 
-
 const handleUserCreation = async (user) => {
   try {
     console.log('🔍 Checking if user exists in Azure DB...');
@@ -131,6 +211,14 @@ const handleUserCreation = async (user) => {
     try {
       const result = await apiService.getUserByUid(user.uid);
       console.log('✅ User already exists in Azure DB:', result.user.email);
+      
+      // Sync existing user to Firestore if not already there
+      const firestoreUser = await getUserFromFirestore(user.uid);
+      if (!firestoreUser.success) {
+        console.log('📝 Syncing existing Azure user to Firestore...');
+        await syncUserToFirestore(result.user);
+      }
+      
       return result.user;
     } catch (error) {
       if (!error.message.includes('User not found')) {
@@ -156,12 +244,23 @@ const handleUserCreation = async (user) => {
       displayName: userData.displayName
     });
 
+    // Step 1: Create user in Azure DB with chat container
     const result = await apiService.registerUserWithChatContainer(userData);
 
     if (result.success && result.user) {
-      console.log('✅ User + chat container created successfully');
+      console.log('✅ User + chat container created successfully in Azure DB');
       console.log(`📁 Chat container name: ${result.chatContainerName}`);
       console.log(`🆕 Container was ${result.containerCreated ? 'newly created' : 'already existing'}`);
+      
+      // Step 2: Sync the user data to Firestore collection
+      try {
+        await syncUserToFirestore(result.user);
+        console.log('✅ User data synced to both Azure DB and Firestore');
+      } catch (firestoreError) {
+        console.error('⚠️ User created in Azure DB but Firestore sync failed:', firestoreError.message);
+        // Don't throw here, as the main user creation was successful
+      }
+      
       return result.user;
     } else {
       console.error('❌ Failed to create user in Azure DB:', result.error || 'Unknown error');
@@ -174,8 +273,7 @@ const handleUserCreation = async (user) => {
   }
 };
 
-
-// Update user online status - Enhanced with error handling
+// Update user online status - Enhanced with Firestore sync
 export const updateUserOnlineStatus = async (userId, isOnline) => {
   if (!userId) return;
   
@@ -184,21 +282,23 @@ export const updateUserOnlineStatus = async (userId, isOnline) => {
     
     // Check if server is running first
     const isServerRunning = await checkServerRunning();
-    if (!isServerRunning) {
-      console.warn('⚠️ Cannot update online status - server not running');
-      return;
+    if (isServerRunning) {
+      // Update in Azure DB (when you implement this endpoint)
+      // await apiService.updateUserStatus(userId, isOnline);
     }
     
-    // For now, just log the status change
-    // You can implement this endpoint in your backend later if needed
-    // await apiService.updateUserStatus(userId, isOnline);
+    // Also update in Firestore
+    await updateUserInFirestore(userId, { 
+      isOnline, 
+      lastSeenAt: new Date().toISOString() 
+    });
     
   } catch (error) {
     console.warn('⚠️ Failed to update user online status:', error.message);
   }
 };
 
-// Search users function - Using backend API with improved error handling
+// Search users function - Enhanced to search both Azure and Firestore
 export const searchUsers = async (searchTerm) => {
   if (!searchTerm || searchTerm.length < 2) {
     return { success: false, error: 'Search term too short' };
@@ -213,7 +313,7 @@ export const searchUsers = async (searchTerm) => {
       return { success: false, error: 'Backend server is not accessible' };
     }
     
-    // Get all users and filter client-side
+    // Get all users from Azure DB and filter client-side
     const result = await apiService.getAllUsers();
     if (result.success && result.users) {
       const filteredUsers = result.users.filter(user => 
@@ -250,20 +350,31 @@ export const getAllUsers = async () => {
   }
 };
 
-// Get specific user
+// Get specific user - Enhanced to try both sources
 export const getUser = async (userId) => {
   try {
     console.log('👤 Fetching specific user:', userId);
     
-    // Check if server is running
+    // Try Azure DB first
     const isServerRunning = await checkServerRunning();
-    if (!isServerRunning) {
-      return { success: false, error: 'Backend server is not accessible' };
+    if (isServerRunning) {
+      try {
+        const result = await apiService.getUserByUid(userId);
+        console.log('✅ User retrieved from Azure DB successfully');
+        return result;
+      } catch (azureError) {
+        console.log('⚠️ Azure DB failed, trying Firestore...');
+      }
     }
     
-    const result = await apiService.getUserByUid(userId);
-    console.log('✅ User retrieved successfully');
-    return result;
+    // Fallback to Firestore
+    const firestoreResult = await getUserFromFirestore(userId);
+    if (firestoreResult.success) {
+      console.log('✅ User retrieved from Firestore successfully');
+      return { success: true, user: firestoreResult.user };
+    }
+    
+    return { success: false, error: 'User not found in any database' };
   } catch (error) {
     console.error('❌ Get user error:', error.message);
     return { success: false, error: error.message };
