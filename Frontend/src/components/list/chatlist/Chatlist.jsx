@@ -1,95 +1,18 @@
-// import React, { useState, useEffect } from 'react'
-// import './chatlist.css'
-// import Adduser from './adduser/Adduser'
-// import { useUserStore } from '../../../lib/useStore'
-// import { doc, onSnapshot, getDoc } from 'firebase/firestore'
-// import { db } from '../../../lib/firebase'
 
-// const Chatlist = () => {
-//   const [chats, setChats] = useState([])
-//   const [addMode, setAddMode] = useState(false)
-//   const { currentUser } = useUserStore()
-
-//   useEffect(() => {
-//     if (!currentUser?.uid) return
-
-//     const unSub = onSnapshot(doc(db, "user_chats", currentUser.uid), async (res) => {
-//       const items = res.data()?.chats || []
-
-//       const promises = items.map(async (item) => {
-//         const userdocRef = doc(db, "user_chats", item.recieverId)
-//         const userdocSnap = await getDoc(userdocRef)
-//         const user = userdocSnap.exists() ? userdocSnap.data() : {}
-//         return { ...item, ...user }
-//       })
-
-//       const chatsData = await Promise.all(promises)
-//       setChats(chatsData.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)))
-//     })
-
-//     return () => {
-//       unSub()
-//     }
-//   }, [currentUser?.uid])
-
-//   return (
-//     <div className='chatlist'>
-//       <div className="search">
-//         <div className="searchbar">
-//           <img src="search.png" alt="" />
-//           <input type="text" placeholder='Search' />
-//         </div>
-//         <img
-//           src={addMode ? "./minus.png" : "./plus.png"}
-//           alt=""
-//           className='add'
-//           onClick={() => setAddMode(prev => !prev)}
-//         />
-//       </div>
-
-//       {Array.isArray(chats) && chats.length > 0 ? (
-//         chats.map((chat, idx) => {
-//           if (!chat || typeof chat !== 'object') return null;
-//           // Optionally, check for required fields:
-//           // if (!chat.displayName && !chat.lastMessage) return null;
-//           return (
-//             <div className="item" key={chat.id || idx}>
-//               <img src={chat.photoURL || "avatar.png"} alt="" />
-//               <div className="texts">
-//                 <span>{chat.displayName || "Unknown User"}</span>
-//                 <p>{chat.lastMessage || "No messages yet"}</p>
-//               </div>
-//             </div>
-//           );
-//         })
-//       ) : (
-//         <div className="item">
-//           <img src="avatar.png" alt="" />
-//           <div className="texts">
-//             <span>No Chats</span>
-//             <p>Start a conversation!</p>
-//           </div>
-//         </div>
-//       )}
-
-//       {addMode && <Adduser />}
-//     </div>
-//   )
-// }
-
-// export default Chatlist
 
 import React, { useState, useEffect } from 'react';
 import './chatlist.css';
 import Adduser from './adduser/Adduser';
 import { useUserStore } from '../../../lib/useStore';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore'; // Combined imports
 import { db } from '../../../lib/firebase';
+import { useChatStore } from '../../../lib/chatStore';
 
 const Chatlist = () => {
   const [chats, setChats] = useState([]);
   const [addMode, setAddMode] = useState(false);
   const { currentUser } = useUserStore();
+  const { changeChat } = useChatStore();
 
   useEffect(() => {
     if (!currentUser?.uid) return;
@@ -106,7 +29,8 @@ const Chatlist = () => {
         displayName: chat.otherUser?.displayName || "Unknown User",
         photoURL: chat.otherUser?.avatar || "avatar.png",
         lastMessage: chat.lastMessage || "No messages yet",
-        lastMessageTime: chat.lastMessageTime?.toDate() || new Date(0)
+        lastMessageTime: chat.lastMessageTime?.toDate() || new Date(0),
+        isSeen: chat.isSeen || false
       }));
 
       setChats(
@@ -117,8 +41,35 @@ const Chatlist = () => {
     return () => unSub();
   }, [currentUser?.uid]);
 
+  const handleselect = async (chat) => { // Made async
+    try {
+      // Create updated chats array
+      const updatedChats = chats.map(item => {
+        if (item.chatId === chat.chatId) {
+          return { ...item, isSeen: true };
+        }
+        return item;
+      });
+
+      // Update Firestore
+      const userChatsRef = doc(db, "user_chats", currentUser.uid);
+      await updateDoc(userChatsRef, {
+        chats: updatedChats.map(({ lastMessageTime, ...rest }) => rest) // Remove Date objects
+      });
+
+      // Update local state
+      setChats(updatedChats);
+      
+      // Change the active chat
+      changeChat(chat.chatId, chat.otherUser, currentUser);
+    } catch(err) {
+      console.error("Error updating chat status:", err);
+    }
+  };
+
   return (
     <div className='chatlist'>
+      {/* Rest of your JSX remains the same */}
       <div className="search">
         <div className="searchbar">
           <img src="search.png" alt="Search" />
@@ -135,7 +86,12 @@ const Chatlist = () => {
       <div className="chat-items">
         {chats.length > 0 ? (
           chats.map(chat => (
-            <div className="item" key={chat.chatId}>
+            <div 
+              className="item" 
+              key={chat.chatId} 
+              onClick={() => handleselect(chat)} 
+              style={{ backgroundColor: chat.isSeen ? "transparent" : "#5183fe" }}
+            >
               <img 
                 src={chat.photoURL} 
                 alt={chat.displayName} 

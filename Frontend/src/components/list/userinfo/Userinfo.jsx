@@ -89,8 +89,10 @@ const Userinfo = () => {
           onError={handleImageError}
           className='profile-image'
         />
-        <h2>{displayName}</h2>
-        {currentUser.isOnline && <span className='online-indicator'></span>}
+<div className="user-container">
+  <h2>{displayName}</h2>
+  {currentUser.isOnline && <span className='online-indicator'></span>}
+</div>
       </div>
       <div className='icons'>
         <img src="more.png" alt="More options" />

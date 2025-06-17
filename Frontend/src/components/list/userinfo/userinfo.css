@@ -57,17 +57,17 @@
     object-fit: cover;
   }
   
-  /* Online indicator */
-  .user {
-    position: relative;
+  .user-container {
+    display: flex;
+    align-items: center;
+    position: relative; /* Needed for small adjustments */
   }
   
   .online-indicator {
-    position: absolute;
-    bottom: 5px;
-    right: 5px;
     width: 12px;
     height: 12px;
+    margin-left: 10px; /* Moves it 2px right */
+    margin-top: 1px; /* Moves it 2px down */
     background-color: #4CAF50;
     border-radius: 50%;
     border: 2px solid white;

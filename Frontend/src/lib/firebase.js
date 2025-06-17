@@ -4,6 +4,11 @@ import { getAuth } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, collection } from "firebase/firestore";
 import { apiService } from './api'; // Import your existing API service
 
+import { getFunctions } from 'firebase/functions';
+
+
+
+  // Add this line
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAaRS_NOexD1-IeXHf3xqQcGRr9dyBTb0k",
@@ -19,7 +24,7 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-
+export const functions = getFunctions(app);
 // Track user creation promises to prevent race conditions
 const userCreationPromises = new Map();
 const processedUsers = new Set(); // Track already processed users
@@ -66,38 +71,71 @@ const checkServerRunning = async () => {
 };
 
 // New function to sync user data to Firebase Firestore
+// const syncUserToFirestore = async (userData) => {
+//   try {
+//     console.log('🔄 Syncing user data to Firestore collection "user"...');
+    
+//     // Create user document in 'user' collection
+//     const userRef = doc(db, 'user', userData.uid);
+    
+//     // Prepare data for Firestore (ensure all fields are properly formatted)
+//     const firestoreUserData = {
+//       uid: userData.uid,
+//       email: userData.email,
+//       displayName: userData.displayName,
+//       photoURL: userData.photoURL || '',
+//       createdAt: userData.createdAt,
+//       blocked: userData.blocked || [],
+//       isOnline: userData.isOnline || true,
+//       // Add any additional fields from Azure DB
+//       lastLoginAt: new Date().toISOString(),
+//       syncedFromAzure: true,
+//       syncedAt: new Date().toISOString()
+//     };
+    
+//     // Write to Firestore
+//     await setDoc(userRef, firestoreUserData, { merge: true });
+//     console.log('✅ User data synced to Firestore successfully');
+    
+//     return firestoreUserData;
+//   } catch (error) {
+//     console.error('❌ Failed to sync user to Firestore:', error);
+//     throw new Error(`Firestore sync failed: ${error.message}`);
+//   }
+// };
 const syncUserToFirestore = async (userData) => {
   try {
+    if (!userData || !userData.uid || !userData.email) {
+      throw new Error("User data is incomplete. Cannot sync to Firestore.");
+    }
+
     console.log('🔄 Syncing user data to Firestore collection "user"...');
-    
-    // Create user document in 'user' collection
+
     const userRef = doc(db, 'user', userData.uid);
-    
-    // Prepare data for Firestore (ensure all fields are properly formatted)
+
     const firestoreUserData = {
       uid: userData.uid,
       email: userData.email,
-      displayName: userData.displayName,
+      displayName: userData.displayName || userData.email.split('@')[0],
       photoURL: userData.photoURL || '',
-      createdAt: userData.createdAt,
-      blocked: userData.blocked || [],
-      isOnline: userData.isOnline || true,
-      // Add any additional fields from Azure DB
+      createdAt: userData.createdAt || new Date().toISOString(),
+      blocked: Array.isArray(userData.blocked) ? userData.blocked : [],
+      isOnline: typeof userData.isOnline === 'boolean' ? userData.isOnline : true,
       lastLoginAt: new Date().toISOString(),
       syncedFromAzure: true,
       syncedAt: new Date().toISOString()
     };
-    
-    // Write to Firestore
+
     await setDoc(userRef, firestoreUserData, { merge: true });
+
     console.log('✅ User data synced to Firestore successfully');
-    
     return firestoreUserData;
   } catch (error) {
-    console.error('❌ Failed to sync user to Firestore:', error);
+    console.error('❌ Failed to sync user to Firestore:', error.message);
     throw new Error(`Firestore sync failed: ${error.message}`);
   }
 };
+
 
 // New function to get user from Firestore
 export const getUserFromFirestore = async (uid) => {

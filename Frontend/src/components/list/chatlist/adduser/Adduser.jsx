@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore'
 import { useUserStore } from '../../../../lib/useStore'
 
-const Adduser = () => {
+const Adduser = ({ onClose }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(false)
   const { currentUser } = useUserStore()
@@ -70,7 +70,7 @@ const Adduser = () => {
       if (currentUserChatsDoc.exists()) {
         const existingChats = currentUserChatsDoc.data().chats || []
         const existingChat = existingChats.find(chat => 
-          chat.participants.includes(user.uid) && chat.participants.includes(currentUser.uid)
+          chat.otherUser?.uid === user.uid
         )
         
         if (existingChat) {
@@ -82,7 +82,9 @@ const Adduser = () => {
         }
       }
 
-      // Create a new chat document
+      console.log("🔄 Starting chat creation process...")
+      
+      // Create a new chat document in the chats collection
       const chatRef = collection(db, "chats")
       const newChatDoc = await addDoc(chatRef, {
         createdAt: serverTimestamp(),
@@ -94,10 +96,10 @@ const Adduser = () => {
         createdBy: currentUser.uid
       })
       
-      console.log("Chat created successfully with ID:", newChatDoc.id)
+      console.log("✅ Chat document created with ID:", newChatDoc.id)
       
-      // Prepare chat data for user_chats
-      const chatData = {
+      // Prepare chat data for current user's user_chats document
+      const currentUserChatData = {
         chatId: newChatDoc.id,
         participants: [currentUser.uid, user.uid],
         lastMessage: "",
@@ -110,6 +112,7 @@ const Adduser = () => {
         }
       }
       
+      // Prepare chat data for other user's user_chats document
       const otherUserChatData = {
         chatId: newChatDoc.id,
         participants: [currentUser.uid, user.uid],
@@ -123,53 +126,68 @@ const Adduser = () => {
         }
       }
       
-      // Update current user's chat list
+      console.log("📝 Chat data prepared for both users")
+      
+      // 1. Create/Update current user's user_chats document
+      console.log("🔄 Updating current user document:", currentUser.uid)
+      
       try {
         const currentUserDoc = await getDoc(currentUserChatsRef)
         if (currentUserDoc.exists()) {
           await updateDoc(currentUserChatsRef, {
-            chats: arrayUnion(chatData)
+            chats: arrayUnion(currentUserChatData)
           })
+          console.log("✅ Updated current user's chat list")
         } else {
           await setDoc(currentUserChatsRef, {
-            chats: [chatData]
+            chats: [currentUserChatData]
           })
+          console.log("✅ Created current user's chat list")
         }
-      } catch (updateErr) {
-        console.error("Error updating current user chats:", updateErr)
-        throw updateErr
+      } catch (currentUserError) {
+        console.error("❌ Error with current user document:", currentUserError)
+        throw new Error(`Failed to update current user: ${currentUserError.message}`)
       }
       
-      // Update other user's chat list
+      // 2. Create/Update other user's user_chats document  
+      console.log("🔄 Updating other user document:", user.uid)
       const otherUserChatsRef = doc(db, "user_chats", user.uid)
+      
       try {
         const otherUserDoc = await getDoc(otherUserChatsRef)
         if (otherUserDoc.exists()) {
           await updateDoc(otherUserChatsRef, {
             chats: arrayUnion(otherUserChatData)
           })
+          console.log("✅ Updated other user's chat list")
         } else {
           await setDoc(otherUserChatsRef, {
             chats: [otherUserChatData]
           })
+          console.log("✅ Created other user's chat list")
         }
-      } catch (updateErr) {
-        console.error("Error updating other user chats:", updateErr)
-        throw updateErr
+      } catch (otherUserError) {
+        console.error("❌ Error with other user document:", otherUserError)
+        throw new Error(`Failed to update other user: ${otherUserError.message}`)
       }
       
+      console.log("🎉 Successfully created both user_chats documents!")
       alert(`Chat created successfully with ${user.displayName}!`)
       setUser(null)
       document.querySelector('input[name="displayName"]').value = ''
       
-    } catch (err) {
-      console.error("Error creating chat:", err)
-      alert("Failed to create chat. Please try again.")
-      
-      if (err.code) {
-        console.error("Error code:", err.code)
-        console.error("Error message:", err.message)
+      // Close the add user modal if onClose prop is provided
+      if (onClose) {
+        onClose()
       }
+      
+    } catch (err) {
+      console.error("❌ Full error object:", err)
+      console.error("❌ Error message:", err.message)
+      console.error("❌ Error code:", err.code)
+      console.error("❌ Error stack:", err.stack)
+      
+      alert(`Failed to create chat: ${err.message}`)
     } finally {
       setLoading(false)
     }
