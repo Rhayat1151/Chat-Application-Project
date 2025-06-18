@@ -219,52 +219,7 @@ app.post('/api/users', async (req, res) => {
 // UPDATED: Register user with chat container and image support
 // UPDATED: Register user with chat container and image support
 // UPDATED: Register user with chat container and image support
-app.post('/api/users/register-with-chat', async (req, res) => {
-  try {
-    const { uid, email, displayName, photoURL } = req.body;
-    
-    // Validate required fields
-    if (!uid || !email) {
-      return res.status(400).json({ error: 'UID and email are required' });
-    }
 
-    // Create user document
-    const userDoc = {
-      id: uid,
-      uid,
-      email,
-      displayName: displayName || email.split('@')[0],
-      photoURL: photoURL || '', // Ensure this is never undefined
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isOnline: true,
-      blocked: []
-    };
-
-    // Save to Cosmos DB
-    const { resource: createdUser } = await userContainer.items.upsert(userDoc);
-    
-    // Create chat container
-    const chatContainerName = generateChatContainerName(createdUser);
-    await createChatContainer(chatContainerName, uid);
-
-    // Return user data with ALL fields including photoURL
-    res.json({
-      success: true,
-      user: {
-        ...createdUser, // This includes all fields from the database
-        chatContainerName,
-        photoURL: createdUser.photoURL || photoURL || '' // Ensure photoURL is included
-      }
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ 
-      error: 'Registration failed',
-      details: error.message 
-    });
-  }
-});
 
 // Get user by UID
 app.get('/api/users/:uid', async (req, res) => {
@@ -323,51 +278,92 @@ app.post('/api/upload-profile-image', upload.single('image'), async (req, res) =
 });
 
 // Enhanced registration endpoint
+// app.post('/api/users/register-with-chat', async (req, res) => {
+//   try {
+//     const { uid, email, displayName, photoURL = '' } = req.body;
+
+//     if (!uid || !email) {
+//       return res.status(400).json({ error: 'UID and email are required' });
+//     }
+
+//     const userDoc = {
+//       id: uid,
+//       uid,
+//       email,
+//       displayName: displayName || email.split('@')[0],
+//       photoURL: photoURL || '',
+//       createdAt: new Date().toISOString(),
+//       updatedAt: new Date().toISOString(),
+//       isOnline: true,
+//       blocked: []
+//     };
+
+//     const { resource: createdUser } = await userContainer.items.upsert(userDoc);
+
+//     const chatContainerName = generateChatContainerName(createdUser);
+//     await createChatContainer(chatContainerName, uid);
+
+//     res.json({
+//       success: true,
+//       user: {
+//         ...createdUser,
+//         chatContainerName,
+//         photoURL: createdUser.photoURL || photoURL || '' // ✅ Explicitly include image URL
+//       }
+//     });
+//   } catch (error) {
+//     console.error('Registration error:', error);
+//     res.status(500).json({ 
+//       error: 'Registration failed',
+//       details: error.message 
+//     });
+//   }
+// });
 app.post('/api/users/register-with-chat', async (req, res) => {
   try {
     const { uid, email, displayName, photoURL = '' } = req.body;
-    
-    // Validate required fields
+
     if (!uid || !email) {
       return res.status(400).json({ error: 'UID and email are required' });
     }
 
-    // Create user document
+    console.log('📩 Received user registration:', { uid, email, displayName, photoURL });
+
     const userDoc = {
       id: uid,
       uid,
       email,
       displayName: displayName || email.split('@')[0],
-      photoURL: photoURL || '', // Ensure this is never undefined
+      photoURL: photoURL, // ✅ Pass the uploaded image URL directly
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       isOnline: true,
       blocked: []
     };
 
-    // Save to Cosmos DB
     const { resource: createdUser } = await userContainer.items.upsert(userDoc);
-    
-    // Create chat container
+
     const chatContainerName = generateChatContainerName(createdUser);
     await createChatContainer(chatContainerName, uid);
 
-    // Return user data with the photoURL
     res.json({
       success: true,
       user: {
         ...createdUser,
-        chatContainerName
+        chatContainerName,
+        photoURL: userDoc.photoURL // ✅ Ensure it's in the response
       }
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('❌ Registration error:', error);
     res.status(500).json({ 
       error: 'Registration failed',
       details: error.message 
     });
   }
 });
+
+
 
 // Get all users
 app.get('/api/users', async (req, res) => {

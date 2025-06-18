@@ -22,6 +22,7 @@ const Userinfo = () => {
           console.log('✅ CORS test successful:', response.status);
         } catch (error) {
           console.error('❌ CORS test failed:', error);
+          console.log({currentUser  });
         }
       };
       testCORS();
@@ -59,6 +60,7 @@ const Userinfo = () => {
       </div>
     )
   }
+  console.log("📸 currentUser.photoURL:", currentUser?.photoURL);
 
   const displayName = currentUser.displayName ||
     currentUser.email?.split('@')[0] ||
