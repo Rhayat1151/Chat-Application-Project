@@ -30,13 +30,13 @@ jobs:
 
       - name: Zip backend for deployment
         working-directory: Backend
-        run: zip -r ../../release.zip .
+        run: zip -r release.zip .
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: backend-app
-          path: release.zip
+          path: Backend/release.zip
 
   deploy:
     runs-on: ubuntu-latest
