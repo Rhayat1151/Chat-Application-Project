@@ -714,12 +714,14 @@ app.use(cors({
     'http://localhost:5173', 
     'http://localhost:5174',
     'http://127.0.0.1:5173',
-    'http://127.0.0.1:5174'
+    'http://127.0.0.1:5174',
+    'http://40.81.244.33' // ✅ Add this line
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
 
 // Cosmos DB setup
