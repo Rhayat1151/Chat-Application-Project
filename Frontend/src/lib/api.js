@@ -1,5 +1,4 @@
-// lib/api.js
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = `${import.meta.env.VITES_API_BASE_URL}/api`;
 
 class ApiService {
   async request(endpoint, options = {}) {
@@ -13,7 +12,6 @@ class ApiService {
       ...options,
     };
 
-    // Only stringify if body exists and is an object (not FormData)
     if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
       config.body = JSON.stringify(config.body);
     }
@@ -23,13 +21,10 @@ class ApiService {
       if (config.body && !(config.body instanceof FormData)) {
         console.log('📤 Request body:', JSON.parse(config.body));
       }
-      
+
       const response = await fetch(url, config);
-      
-      // Log response status
       console.log(`📥 Response status: ${response.status} ${response.statusText}`);
-      
-      // Try to parse response as JSON
+
       let data;
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
@@ -48,7 +43,6 @@ class ApiService {
       console.log('✅ API Success:', data);
       return data;
     } catch (error) {
-      // Don't log "User not found" errors as they're expected during first login
       if (!error.message.includes('User not found')) {
         console.error(`❌ API request failed for ${endpoint}:`, error);
       }
@@ -56,7 +50,6 @@ class ApiService {
     }
   }
 
-  // Image upload method
   async uploadProfileImage(file) {
     console.log('📸 Uploading profile image:', file.name, file.size, 'bytes');
     
@@ -68,7 +61,7 @@ class ApiService {
     try {
       const response = await fetch(url, {
         method: 'POST',
-        body: formData, // Don't set Content-Type header, let browser set it
+        body: formData,
       });
 
       console.log(`📥 Upload response status: ${response.status}`);
@@ -88,7 +81,6 @@ class ApiService {
     }
   }
 
-  // User management methods
   async createUser(userData) {
     return this.request('/users', {
       method: 'POST',
@@ -100,7 +92,6 @@ class ApiService {
     return this.request(`/users/${uid}`);
   }
 
-  // New method with retry logic for user fetching
   async getUserByUidWithRetry(uid, maxRetries = 3, delay = 1000) {
     for (let i = 0; i < maxRetries; i++) {
       try {
@@ -133,7 +124,6 @@ class ApiService {
     });
   }
 
-  // Block/Unblock user methods
   async blockUser(currentUserId, userToBlockId) {
     return this.request(`/users/${currentUserId}/block`, {
       method: 'POST',
@@ -152,7 +142,6 @@ class ApiService {
     return this.request(`/users/${userId}/blocked`);
   }
 
-  // Chat container/collection methods
   async createChatContainer(containerName) {
     return this.request('/chats/container', {
       method: 'POST',
@@ -188,7 +177,6 @@ class ApiService {
     });
   }
 
-  // Combined user registration with chat container creation
   async registerUserWithChatContainer(userData) {
     console.log('🔥 Registering user with chat container:', userData);
     return this.request('/users/register-with-chat', {
@@ -197,12 +185,10 @@ class ApiService {
     });
   }
 
-  // Combined registration with image upload
   async registerUserWithImageAndChat(userData, imageFile = null) {
     try {
-      let photoURL = userData.photoURL || ''; // Start with existing URL if any
+      let photoURL = userData.photoURL || '';
       
-      // Only upload new image if provided
       if (imageFile) {
         console.log('📸 Uploading image first...');
         const imageResponse = await this.uploadProfileImage(imageFile);
@@ -212,7 +198,7 @@ class ApiService {
 
       const userDataWithImage = {
         ...userData,
-        photoURL: photoURL // Ensure URL is included
+        photoURL,
       };
 
       console.log('👤 Registering user with data:', userDataWithImage);
@@ -223,7 +209,6 @@ class ApiService {
     }
   }
 
-  // Health check
   async healthCheck() {
     try {
       console.log('🏥 Checking API health...');
