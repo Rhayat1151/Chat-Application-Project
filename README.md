@@ -1,4 +1,15 @@
-# Chat Application
+<h1 align="center">
+  <br>
+  <img src="https://img.icons8.com/clouds/200/000000/chat.png" alt="Chat Icon" width="100">
+  <br>
+  <br>
+  <strong>NexusChat</strong>
+  <br>
+  <br>
+  <span style="font-size: 1.2rem; font-weight: normal;">Real-time Cloud-Powered Messaging Platform</span>
+  <br>
+  <br>
+</h1>
 
 ![React](https://img.shields.io/badge/React-18.0%2B-61DAFB)
 
@@ -20,11 +31,10 @@
 - [Usage](#usage)
 - [Deployment](#deployment)
 - [Contributing](#contributing)
-- [License](#license)
 - [Acknowledgements](#acknowledgements)
 
 ## Project Overview
-A full-stack real-time chat application built with React, Node.js, and Firebase. This application provides a seamless messaging experience with features like real-time chat, user authentication, and file sharing. The project showcases modern web development practices and cloud computing concepts.
+A full-stack real-time chat application built with React, Node.js, Azure and Firebase. This application provides a seamless messaging experience with features like real-time chat, user authentication, and file sharing. The project showcases modern web development practices and cloud computing concepts.
 
 ## Project Objective
 To develop a scalable, real-time chat application that demonstrates proficiency in full-stack development, cloud computing concepts, and modern web technologies. The project showcases skills in building responsive UIs, handling real-time data, and implementing secure user authentication.
